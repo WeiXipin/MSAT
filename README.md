@@ -2,7 +2,8 @@
 
 ## Set up development environment
 
-We recommend using Conda. You can create the environment with the following command.
+Please go to MSAT/msat. You can create the environment with the following command.
+
 
 ```sh
 conda env create -f environment.yml
