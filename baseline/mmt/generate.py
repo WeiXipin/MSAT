@@ -126,7 +126,11 @@ def save_result(filename, data, sample_dir, encoding,numberm):
         music = representation.decode(data, encoding)
         # Save as a MIDI file
         music.write(sample_dir / "mid"  / "unconditioned" / f"{filename}.mid")
-        
+    if numberm==5:
+        representation.save_csv_codes(sample_dir / "csv" / "instrument-beats" / f"{filename}.csv", data)
+        music = representation.decode(data, encoding)
+        # Save as a MIDI file
+        music.write(sample_dir / "mid"  / "instrument-beats" / f"{filename}.mid")
         
 def get_cut_beat(beatnumber,batch):
     # cut hang：
@@ -149,7 +153,25 @@ def get_cut_beat(beatnumber,batch):
     
     batch_input = torch.unsqueeze(batch_input, 0)
     return batch_input
+
+def get_instrument_beat(batch):
+    # cut hang：
+    batch1 = []                
+    for i in range(batch["seq"].shape[1]):
+        if batch["seq"][0][i][0]!=3 and batch["seq"][0][i][0]!=4:
+            batch1.append(batch["seq"][0][i])
+
     
+    for r in batch1:
+        r = torch.unsqueeze(r, 0)
+        if r[0][0] ==0:
+            batch_input = r
+            continue
+        else:
+            batch_input = torch.cat((batch_input,r),0)
+    
+    batch_input = torch.unsqueeze(batch_input, 0)
+    return batch_input      
     
 def main():
     """Main function."""
@@ -200,11 +222,13 @@ def main():
     (sample_dir / "csv").mkdir(exist_ok=True)
     (sample_dir / "csv" / "truth").mkdir(exist_ok=True)
     (sample_dir / "csv" / "4-beats").mkdir(exist_ok=True)
+    (sample_dir / "csv" / "instrument-beats").mkdir(exist_ok=True)
     (sample_dir / "csv" / "16-beats").mkdir(exist_ok=True)
     (sample_dir / "csv" / "unconditioned").mkdir(exist_ok=True)
     (sample_dir / "mid").mkdir(exist_ok=True)
     (sample_dir / "mid" / "truth").mkdir(exist_ok=True)
     (sample_dir / "mid" / "4-beats").mkdir(exist_ok=True)
+    (sample_dir / "mid" / "instrument-beats").mkdir(exist_ok=True)
     (sample_dir / "mid" / "16-beats").mkdir(exist_ok=True)
     (sample_dir / "mid" / "unconditioned").mkdir(exist_ok=True)
 
@@ -281,7 +305,39 @@ def main():
             truth_np = batch["seq"][0].numpy()
             save_result(f"{i}_truth", truth_np, sample_dir, encoding,1)
 
-           
+            # -------------------
+            # instrumtns-beat continuation
+            # -------------------
+
+            # Get output start tokens
+            batch_input_instru = get_instrument_beat(batch)
+            
+            tgt_start = batch_input_instru.to(device)
+            print(tgt_start)
+            # print(tgt_start.shape[1])
+            if tgt_start.shape[1]<=3:
+                continue
+            # Generate new samples
+            generated = model.generate(
+                tgt_start,
+                args.seq_len,
+                eos_token=eos,
+                temperature=args.temperature,
+                filter_logits_fn=args.filter,
+                filter_thres=args.filter_threshold,
+                monotonicity_dim=("type", "beat"),
+            )
+            generated_np = torch.cat((tgt_start, generated), 1).cpu().numpy()
+
+            # Save the results
+            save_result(
+                f"{i}_instrument-continuation",
+                generated_np[0],
+                sample_dir,
+                encoding,
+                5
+            )
+    
             # -------------------
             # 4-beat continuation
             # -------------------
@@ -364,6 +420,9 @@ def main():
             save_result(
                 f"{i}_unconditioned", generated_np[0], sample_dir, encoding,4
             )
+   
+            
+
 
 
 if __name__ == "__main__":
