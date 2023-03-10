@@ -1,4 +1,4 @@
-name: mtmt4
+name: msat
 channels:
   - conda-forge
   - pytorch
